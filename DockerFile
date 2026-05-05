@@ -1,31 +1,37 @@
-# Etapa de compilación
+# Stage 1: Build
 FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
-ARG BUILD_CONFIGURATION=Release
-WORKDIR /src
-COPY ["src/SintesisV-3/SintesisV-3.csproj", "SintesisV-3/"]
-RUN dotnet restore "SintesisV-3/SintesisV-3.csproj"
-COPY src/SintesisV-3/ .
-WORKDIR "/src/SintesisV-3"
-RUN dotnet build "SintesisV-3.csproj" -c $BUILD_CONFIGURATION -o /app/build
+WORKDIR /app
 
-FROM build AS publish
-RUN dotnet publish "SintesisV-3.csproj" -c $BUILD_CONFIGURATION -o /app/publish /p:UseAppHost=false
+# Copiar archivos de proyecto y restaurar
+COPY ["src/SintesisV-3/SintesisV-3.csproj", "src/SintesisV-3/"]
+RUN dotnet restore "src/SintesisV-3/SintesisV-3.csproj"
 
-# Etapa final (Runtime)
+# Copiar resto del código y publicar
+COPY . .
+WORKDIR "/app/src/SintesisV-3"
+RUN dotnet publish "SintesisV-3.csproj" -c Release -o /app/publish /p:UseAppHost=false
+
+# Stage 2: Runtime
 FROM mcr.microsoft.com/dotnet/aspnet:8.0 AS final
 WORKDIR /app
-COPY --from=publish /app/publish .
+EXPOSE 8080
 
-# --- Configuración de TLS y Ciphers ---
+# Configuración de OpenSSL para soportar TLS 1.1, 1.2, 1.3 y Ciphers específicos
 USER root
-RUN apt-get update && apt-get install -y openssl && rm -rf /var/lib/apt/lists/*
+RUN sed -i 's/Providers = default_sect/Providers = provider_sect/g' /etc/ssl/openssl.cnf && \
+    sed -i '/\[provider_sect\]/a legacy = legacy_sect' /etc/ssl/openssl.cnf && \
+    sed -i '/\[provider_sect\]/a default = default_sect' /etc/ssl/openssl.cnf && \
+    echo "[legacy_sect]\nactivate = 1\n\n[default_sect]\nactivate = 1" >> /etc/ssl/openssl.cnf && \
+    sed -i 's/CipherString = DEFAULT@SECLEVEL=2/CipherString = DEFAULT@SECLEVEL=1/g' /etc/ssl/openssl.cnf
 
-# Modificamos openssl.cnf para habilitar TLS 1.1 y Ciphers específicos
-RUN sed -i 's/MinProtocol = TLSv1.2/MinProtocol = TLSv1.1/g' /etc/ssl/openssl.cnf && \
-    sed -i 's/CipherString = DEFAULT@SECLEVEL=2/CipherString = ECDHE-RSA-CHACHA20-POLY1305:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-SHA384:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-SHA256:TLS_AES_256_GCM_SHA384:TLS_CHACHA20_POLY1305_SHA256:TLS_AES_128_GCM_SHA256:DEFAULT@SECLEVEL=1/g' /etc/ssl/openssl.cnf
+# Variables de entorno para ASP.NET Core
+ENV ASPNETCORE_URLS=http://+:8080
+ENV DOTNET_SYSTEM_NET_HTTP_USESOCKETSHTTPHANDLER=0
 
-# Asegurar resolución de DNS (Opcional, usualmente heredado del cluster)
-RUN echo "nameserver 8.8.8.8" > /etc/resolv.conf
+COPY --from=build /app/publish .
 
-USER app
+# Asegurar permisos para el usuario no root de dotnet
+RUN chown -R 1000:1000 /app
+USER 1000
+
 ENTRYPOINT ["dotnet", "SintesisV-3.dll"]
