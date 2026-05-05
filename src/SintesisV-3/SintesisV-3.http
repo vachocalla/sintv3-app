@@ -1,0 +1,6 @@
+@SintesisV_3_HostAddress = http://localhost:5021
+
+GET {{SintesisV_3_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###

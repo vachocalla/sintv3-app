@@ -1,0 +1,56 @@
+{
+  "openapi": "3.0.1",
+  "info": {
+    "title": "SintesisV-3",
+    "version": "1.0"
+  },
+  "paths": {
+    "/login": {
+      "post": {
+        "tags": [
+          "SintesisV-3"
+        ],
+        "summary": "Inicio de Sesión Síntesis",
+        "description": "Envía credenciales para obtener acceso.",
+        "operationId": "IniciarSesionSintesis",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MyLoginRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "MyLoginRequest": {
+        "type": "object",
+        "properties": {
+          "usuario": {
+            "type": "string",
+            "nullable": true
+          },
+          "password": {
+            "type": "string",
+            "nullable": true
+          },
+          "origenTransaccion": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      }
+    }
+  }
+}

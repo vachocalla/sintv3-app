@@ -1,0 +1,89 @@
+trigger:
+  branches:
+    include:
+      - refs/heads/dev
+      - refs/heads/main
+  paths:
+    include:
+      - deploy/kubernetes
+      - deploy/pipe/azure-pipelines.yaml
+      - src/**
+
+variables:
+  # Store PAT token for cloning the gitops repo
+  - group: repository-token
+  - name: gitopsRepository 
+    value: 'https://$(PAT)@dev.azure.com/bsolbo/devsecops/_git/gitops'
+  - name: gitopsDevelopmentRepository 
+    value: 'https://$(PAT)@dev.azure.com/bsolbo/cd-arquitectura/_git/gitops-development'
+  - name: ChangeCause
+    value: '$(Build.SourceVersionMessage).'
+  - name: awsRegion
+    value: 'us-east-1'
+  - name: helmRepositoryName
+    value: 'cd-ecr-qa-dotnet-helm'
+  - name: helmAccountId
+    value: '762653151696'
+  - name: helmContainerRegistry
+    value: '762653151696.dkr.ecr.us-east-1.amazonaws.com'
+  - name: containerRegistry
+    value: '762653151696.dkr.ecr.us-east-1.amazonaws.com'
+  - name: ecrHelmCredentials
+    value: 'aws-ecr-credentials-qa'
+
+  # Lógica de repositorios ECR según la rama
+  - ${{ if eq(variables['Build.SourceBranch'], 'refs/heads/main') }}:
+      - name: acrAwsCredentials
+        value: 'aws-ecr-credentials-prod'
+      - name: RepositoryName
+        value: 'cd-ecr-prod-cluster'
+  - ${{ elseif and(eq(variables['Build.SourceBranch'], 'refs/heads/dev'), eq(variables['Build.Reason'], 'Manual')) }}:
+      - name: acrAwsCredentials
+        value: 'aws-ecr-credentials-qa'
+      - name: RepositoryName
+        value: 'cd-ecr-qa-cluster'
+  - ${{ else }}:
+      - name: acrAwsCredentials
+        value: 'aws-ecr-credentials'
+      - name: RepositoryName
+        value: 'cd-ecr-dev-cluster'
+
+resources:
+  repositories:
+    - repository: template
+      type: git
+      name: "devsecops/pipeline-template"
+      ref: refs/tags/v1.0.0
+
+stages:
+- stage: Build
+  variables:
+  # Ajustado al grupo de variables de tu nuevo proyecto
+  - group: api_gateway_integradorSintesisv3-Dev 
+  pool:
+    vmImage: ubuntu-latest
+  jobs:
+    - job: compile
+      variables:
+        buildConfiguration: "Release"
+      steps:
+        - template: 'templates/dotnet-build.yaml@template'
+          parameters:
+            # Ruta al proyecto SintesisV-3
+            ApiDirectory: 'src/SintesisV-3' 
+            DotnetVersion: '10.0.x'
+            ConditionSonar: true # Activado para asegurar calidad
+            SonarCloudStop: false
+            SnykServiceConnection: 'dominio3-snyk'
+            AdditionalsArgSnykApp: '--all-projects --fail-on=upgradable --exclude-base-image-vulns --prune-repeated-subdependencies'
+            TestDirectorySnyk: 'src/SintesisV-3'
+
+    - job: docker
+      condition: ne(variables['Build.Reason'], 'PullRequest')
+      dependsOn: compile
+      steps:
+        - template: 'templates/dotnet-docker.yaml@template'
+          parameters:
+            ApiDirectory: 'src/SintesisV-3'
+            SnykServiceConnection: 'dominio3-devops-snyk'
+            InfocredCA: false

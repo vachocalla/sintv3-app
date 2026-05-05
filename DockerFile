@@ -1,0 +1,31 @@
+# Etapa de compilación
+FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
+ARG BUILD_CONFIGURATION=Release
+WORKDIR /src
+COPY ["src/SintesisV-3/SintesisV-3.csproj", "SintesisV-3/"]
+RUN dotnet restore "SintesisV-3/SintesisV-3.csproj"
+COPY src/SintesisV-3/ .
+WORKDIR "/src/SintesisV-3"
+RUN dotnet build "SintesisV-3.csproj" -c $BUILD_CONFIGURATION -o /app/build
+
+FROM build AS publish
+RUN dotnet publish "SintesisV-3.csproj" -c $BUILD_CONFIGURATION -o /app/publish /p:UseAppHost=false
+
+# Etapa final (Runtime)
+FROM mcr.microsoft.com/dotnet/aspnet:8.0 AS final
+WORKDIR /app
+COPY --from=publish /app/publish .
+
+# --- Configuración de TLS y Ciphers ---
+USER root
+RUN apt-get update && apt-get install -y openssl && rm -rf /var/lib/apt/lists/*
+
+# Modificamos openssl.cnf para habilitar TLS 1.1 y Ciphers específicos
+RUN sed -i 's/MinProtocol = TLSv1.2/MinProtocol = TLSv1.1/g' /etc/ssl/openssl.cnf && \
+    sed -i 's/CipherString = DEFAULT@SECLEVEL=2/CipherString = ECDHE-RSA-CHACHA20-POLY1305:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-SHA384:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-SHA256:TLS_AES_256_GCM_SHA384:TLS_CHACHA20_POLY1305_SHA256:TLS_AES_128_GCM_SHA256:DEFAULT@SECLEVEL=1/g' /etc/ssl/openssl.cnf
+
+# Asegurar resolución de DNS (Opcional, usualmente heredado del cluster)
+RUN echo "nameserver 8.8.8.8" > /etc/resolv.conf
+
+USER app
+ENTRYPOINT ["dotnet", "SintesisV-3.dll"]
