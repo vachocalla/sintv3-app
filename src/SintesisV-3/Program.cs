@@ -43,7 +43,7 @@ app.MapPost("/login", async ([FromBody] MyLoginRequest loginRequest, IConfigurat
         var json = JsonSerializer.Serialize(loginRequest);
         var content = new StringContent(json, Encoding.UTF8, "application/json");
         client.DefaultRequestHeaders.Add("User-Agent", "SintesisV-3-Proxy");
-
+        /*
         var response = await client.PostAsync(url, content);
         var result = await response.Content.ReadAsStringAsync();
 
@@ -56,7 +56,8 @@ app.MapPost("/login", async ([FromBody] MyLoginRequest loginRequest, IConfigurat
             logger.LogWarning("Síntesis respondió con error. Código: {StatusCode}. Body: {Body}", response.StatusCode, result);
         }
 
-        return Results.Content(result, "application/json", Encoding.UTF8);
+        return Results.Content(result, "application/json", Encoding.UTF8);*/
+        return Results.Content("{}", "application/json", Encoding.UTF8);
     }
     catch (Exception ex)
     {
