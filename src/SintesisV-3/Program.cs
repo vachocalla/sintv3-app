@@ -25,7 +25,7 @@ app.UseSwaggerUI(options =>
 
 app.MapPost("/login", async ([FromBody] MyLoginRequest loginRequest, IConfiguration config, ILogger<Program> logger) =>
 {
-    logger.LogInformation("Vic 06052026 0959 Iniciando proceso de login para SintesisV-3 a las {Time}", DateTime.Now);
+    logger.LogInformation("VicV1.0.0.0 06052026 0959 Iniciando proceso de login para SintesisV-3 a las {Time}", DateTime.Now);
 
     var handler = new HttpClientHandler
     {
