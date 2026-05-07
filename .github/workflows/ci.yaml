@@ -12,15 +12,12 @@ jobs:
   build-and-push:
     runs-on: ubuntu-latest
     permissions:
-      contents: write #read
+      contents: read
       packages: write
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-        with:
-          # Importante: fetch-depth 0 permite que git tenga historial para hacer push
-          fetch-depth: 0
 
       - name: Log in to the Container registry
         uses: docker/login-action@v3
@@ -28,7 +25,6 @@ jobs:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      
       # Este paso extrae el ID corto del commit de GitHub
       - name: Set outputs
         id: vars
@@ -44,20 +40,3 @@ jobs:
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.vars.outputs.sha_short }}
           #tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
-      
-      # --- AQUÍ ESTÁ EL TRUCO DEL SED ---
-      - name: Update values.yaml with sed
-        run: |
-          # sed -i: edita el archivo "in-place" (sobre el mismo archivo)
-          # 's/tag: .*/tag: "${{ steps.vars.outputs.sha_short }}"/g': 
-          # Busca la línea que empiece con "tag:", borra el resto y pon el nuevo SHA.
-          sed -i 's/tag: .*/tag: "${{ steps.vars.outputs.sha_short }}"/g' values.yaml
-          
-          # Configurar Git para que pueda hacer el commit
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          
-          # Añadir, commitear y pushear el cambio al repo de GitOps
-          git add values.yaml
-          git commit -m "chore: update image tag to ${{ steps.vars.outputs.sha_short }} [skip ci]"
-          git push origin main
