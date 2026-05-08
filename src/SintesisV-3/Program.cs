@@ -81,7 +81,7 @@ app.MapPost("/login", async ([FromBody] MyLoginRequest loginRequest, IConfigurat
 .Accepts<MyLoginRequest>("application/json")
 .WithOpenApi(operation =>
 {
-    operation.Summary = "Inicio de Sesión Síntesis fecha hora 2026-05-06 03:57:00";
+    operation.Summary = "Inicio de Sesión Síntesis fecha hora 2026-05-06 04:10:00";
     operation.Description = "Envía credenciales para obtener acceso.";
     return operation;
 });
