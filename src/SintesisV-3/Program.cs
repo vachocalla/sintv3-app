@@ -17,18 +17,68 @@ builder.Services.AddSwaggerGen();
 builder.Services.AddHttpClient("SintesisClient", client =>
 {
     client.BaseAddress = new Uri("https://web.sintesis.com.bo"); // Ajustado a la URL del código original
+    client.DefaultRequestVersion = HttpVersion.Version20;
+    //client.DefaultVersionPolicy = HttpVersionPolicy.RequestVersionOrHigher;
+    //client.DefaultVersionPolicy = HttpVersionPolicy.RequestVersionExact;
     client.DefaultRequestHeaders.Accept.Add(new System.Net.Http.Headers.MediaTypeWithQualityHeaderValue("application/json"));
     client.DefaultRequestHeaders.Add("User-Agent", "SintesisV-3-Proxy");
 })
-.ConfigurePrimaryHttpMessageHandler(() =>
+.ConfigurePrimaryHttpMessageHandler((serviceProvider) =>
 {
+    // Obtenemos el logger desde el contenedor de dependencias
+    var logger = serviceProvider.GetRequiredService<ILogger<Program>>();
+
     return new SocketsHttpHandler
     {
         SslOptions = new System.Net.Security.SslClientAuthenticationOptions
         {
             EnabledSslProtocols = SslProtocols.Tls12 | SslProtocols.Tls13,
             EncryptionPolicy = System.Net.Security.EncryptionPolicy.RequireEncryption,
-            AllowRenegotiation = false
+            AllowRenegotiation = false,
+
+            // CANDADO 2: Validación explícita del protocolo negociado
+            RemoteCertificateValidationCallback = (sender, cert, chain, sslPolicyErrors) =>
+            {
+                // Esto se ejecuta durante el handshake
+                return sslPolicyErrors == System.Net.Security.SslPolicyErrors.None;
+            }
+        },
+        // Este callback nos permite "mirar" dentro del stream SSL una vez autenticado
+        ConnectCallback = async (context, cancellationToken) =>
+        {
+            var socket = new System.Net.Sockets.Socket(System.Net.Sockets.SocketType.Stream, System.Net.Sockets.ProtocolType.Tcp);
+            socket.NoDelay = true;
+
+            try
+            {
+                await socket.ConnectAsync(context.DnsEndPoint, cancellationToken);
+                var sslStream = new System.Net.Security.SslStream(new System.Net.Sockets.NetworkStream(socket, true), false);
+
+                await sslStream.AuthenticateAsClientAsync(new System.Net.Security.SslClientAuthenticationOptions
+                {
+                    TargetHost = context.DnsEndPoint.Host,
+                    EnabledSslProtocols = SslProtocols.Tls12 | SslProtocols.Tls13,
+                }, cancellationToken);
+
+                // --- AQUÍ OBTENEMOS LOS DATOS REALES ---
+                var protocol = sslStream.SslProtocol;
+                var cipher = sslStream.CipherAlgorithm;
+                var strength = sslStream.CipherStrength;
+                var keyExchange = sslStream.KeyExchangeAlgorithm;
+
+                // Podemos guardar esto en el contexto del request o imprimirlo directamente
+                // Para fines de validación, lo imprimimos en consola:
+                //logger.LogInformation("Algoritmo de Cifrado: {Cipher} ({Strength} bits)", sslStream.CipherAlgorithm, sslStream.CipherStrength);
+                logger.LogInformation("Logger: [SECURITY-AUDIT] TLS: {protocol} | Cipher: {cipher} | Strength: {strength} bits | Exchange: {keyExchange}", protocol, cipher, strength, keyExchange);
+                //Console.WriteLine($"[SECURITY-AUDIT] TLS: {protocol} | Cipher: {cipher} | Strength: {strength} bits | Exchange: {keyExchange}");
+
+                return sslStream;
+            }
+            catch
+            {
+                socket.Dispose();
+                throw;
+            }
         }
     };
 });
@@ -57,7 +107,9 @@ app.MapPost("/login", async ([FromBody] MyLoginRequest loginRequest, IConfigurat
         var json = JsonSerializer.Serialize(loginRequest);
         var content = new StringContent(json, Encoding.UTF8, "application/json");
         
-        var response = await client.PostAsync(relativePath, content);
+        using var response = await client.PostAsync(relativePath, content);
+
+        logger.LogInformation("Conexión establecida. HTTP Version: {HttpVer}", response.Version);
 
         // --- BLOQUE DE VALIDACIÓN DE SEGURIDAD ---
         // Accedemos a los metadatos de la conexión TLS

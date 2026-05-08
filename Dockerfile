@@ -34,6 +34,8 @@ RUN sed -i 's/MinProtocol = TLSv1.2/MinProtocol = TLSv1.2/g' /etc/ssl/openssl.cn
 ENV ASPNETCORE_URLS=http://+:8080
 # Habilitamos el SocketsHttpHandler moderno que respeta la configuración de OpenSSL de arriba
 ENV DOTNET_SYSTEM_NET_HTTP_USESOCKETSHTTPHANDLER=1
+# Esta variable asegura que .NET use las librerías de OpenSSL del sistema estrictamente
+ENV CLR_OPENSSL_VERSION_OVERRIDE=3
 
 COPY --from=build /app/publish .
 
