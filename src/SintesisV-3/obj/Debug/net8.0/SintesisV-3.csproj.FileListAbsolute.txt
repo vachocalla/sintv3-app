@@ -98,3 +98,4 @@ C:\Personal\z_Projects\Personal\C_SintV3\bsol-c10-gateway-sintesis-v3\src\Sintes
 C:\Personal\z_Projects\Personal\C_SintV3\bsol-c10-gateway-sintesis-v3\src\SintesisV-3\obj\Debug\net8.0\SintesisV-3.pdb
 C:\Personal\z_Projects\Personal\C_SintV3\bsol-c10-gateway-sintesis-v3\src\SintesisV-3\obj\Debug\net8.0\SintesisV-3.genruntimeconfig.cache
 C:\Personal\z_Projects\Personal\C_SintV3\bsol-c10-gateway-sintesis-v3\src\SintesisV-3\obj\Debug\net8.0\ref\SintesisV-3.dll
+C:\Personal\z_Projects\Personal\C_SintV3\bsol-c10-gateway-sintesis-v3\src\SintesisV-3\obj\Debug\net8.0\SintesisV-3.sourcelink.json

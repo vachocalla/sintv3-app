@@ -7,12 +7,31 @@ using System.Text.Json;
 
 var builder = WebApplication.CreateBuilder(args);
 
-
 builder.Logging.ClearProviders();
 builder.Logging.AddConsole();
 
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
+
+// Registro del HttpClient con la configuración de SocketsHttpHandler solicitada
+builder.Services.AddHttpClient("SintesisClient", client =>
+{
+    client.BaseAddress = new Uri("https://web.sintesis.com.bo"); // Ajustado a la URL del código original
+    client.DefaultRequestHeaders.Accept.Add(new System.Net.Http.Headers.MediaTypeWithQualityHeaderValue("application/json"));
+    client.DefaultRequestHeaders.Add("User-Agent", "SintesisV-3-Proxy");
+})
+.ConfigurePrimaryHttpMessageHandler(() =>
+{
+    return new SocketsHttpHandler
+    {
+        SslOptions = new System.Net.Security.SslClientAuthenticationOptions
+        {
+            EnabledSslProtocols = SslProtocols.Tls12 | SslProtocols.Tls13,
+            EncryptionPolicy = System.Net.Security.EncryptionPolicy.RequireEncryption,
+            AllowRenegotiation = false
+        }
+    };
+});
 
 var app = builder.Build();
 
@@ -23,18 +42,13 @@ app.UseSwaggerUI(options =>
     options.RoutePrefix = string.Empty;
 });
 
-app.MapPost("/login", async ([FromBody] MyLoginRequest loginRequest, IConfiguration config, ILogger<Program> logger) =>
+app.MapPost("/login", async ([FromBody] MyLoginRequest loginRequest, IConfiguration config, ILogger<Program> logger, IHttpClientFactory httpClientFactory) =>
 {
     logger.LogInformation("VicV1.0.0.1 06052026 0959 Iniciando proceso de login para SintesisV-3 a las {Time}", DateTime.Now);
 
-    var handler = new HttpClientHandler
-    {
-        SslProtocols = SslProtocols.Tls12 | SslProtocols.Tls13
-        // Validación de certificado habilitada por defecto al no existir el callback
-    };
-
-    using HttpClient client = new HttpClient(handler);
-    string url = "https://web.sintesis.com.bo/SintesisIntegradoRest/integrado/integrado/iniciarSesion";
+    // Se obtiene el cliente configurado desde la factoría
+    using HttpClient client = httpClientFactory.CreateClient("SintesisClient");
+    string relativePath = "/SintesisIntegradoRest/integrado/integrado/iniciarSesion";
 
     try
     {
@@ -42,9 +56,8 @@ app.MapPost("/login", async ([FromBody] MyLoginRequest loginRequest, IConfigurat
 
         var json = JsonSerializer.Serialize(loginRequest);
         var content = new StringContent(json, Encoding.UTF8, "application/json");
-        client.DefaultRequestHeaders.Add("User-Agent", "SintesisV-3-Proxy");
-        /*
-        var response = await client.PostAsync(url, content);
+        
+        var response = await client.PostAsync(relativePath, content);
         var result = await response.Content.ReadAsStringAsync();
 
         if (response.IsSuccessStatusCode)
@@ -56,8 +69,7 @@ app.MapPost("/login", async ([FromBody] MyLoginRequest loginRequest, IConfigurat
             logger.LogWarning("Síntesis respondió con error. Código: {StatusCode}. Body: {Body}", response.StatusCode, result);
         }
 
-        return Results.Content(result, "application/json", Encoding.UTF8);*/
-        return Results.Content("{}", "application/json", Encoding.UTF8);
+        return Results.Content(result, "application/json", Encoding.UTF8);
     }
     catch (Exception ex)
     {

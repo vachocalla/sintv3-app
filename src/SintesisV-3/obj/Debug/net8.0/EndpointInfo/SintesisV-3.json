@@ -10,7 +10,7 @@
         "tags": [
           "SintesisV-3"
         ],
-        "summary": "Inicio de Sesión Síntesis",
+        "summary": "Inicio de Sesión Síntesis fecha hora 2026-05-06 03:57:00",
         "description": "Envía credenciales para obtener acceso.",
         "operationId": "IniciarSesionSintesis",
         "requestBody": {
