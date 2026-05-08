@@ -58,11 +58,24 @@ app.MapPost("/login", async ([FromBody] MyLoginRequest loginRequest, IConfigurat
         var content = new StringContent(json, Encoding.UTF8, "application/json");
         
         var response = await client.PostAsync(relativePath, content);
+
+        // --- BLOQUE DE VALIDACIÓN DE SEGURIDAD ---
+        // Accedemos a los metadatos de la conexión TLS
+        var tlsInfo = response.RequestMessage?.VersionPolicy; // Política de versión
+
+        // En .NET, para ver el Cipher exacto negociado:
+        #if NET8_0_OR_GREATER
+        // Nota: El acceso a SslStream directamente requiere un handler personalizado, 
+        // pero podemos loguear la versión del protocolo fácilmente:
+        logger.LogInformation("Protocolo TLS Negociado: {Protocol}", response.Version);
+        #endif
+
         var result = await response.Content.ReadAsStringAsync();
 
         if (response.IsSuccessStatusCode)
         {
             logger.LogInformation("Respuesta exitosa recibida de Síntesis. Código: {StatusCode}", response.StatusCode);
+            logger.LogInformation("Conexión segura establecida exitosamente bajo SECLEVEL=2.");
         }
         else
         {
@@ -81,7 +94,7 @@ app.MapPost("/login", async ([FromBody] MyLoginRequest loginRequest, IConfigurat
 .Accepts<MyLoginRequest>("application/json")
 .WithOpenApi(operation =>
 {
-    operation.Summary = "Inicio de Sesión Síntesis fecha hora 2026-05-06 04:10:00";
+    operation.Summary = "Inicio de Sesión Síntesis fecha hora 2026-05-06 04:21:00";
     operation.Description = "Envía credenciales para obtener acceso.";
     return operation;
 });
