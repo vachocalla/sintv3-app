@@ -11,36 +11,37 @@ COPY . .
 WORKDIR "/app/src/SintesisV-3"
 RUN dotnet publish "SintesisV-3.csproj" -c Release -o /app/publish /p:UseAppHost=false
 
-# Stage 2: Runtime
-FROM mcr.microsoft.com/dotnet/aspnet:8.0 AS final
+# Stage 2: Runtime (Imagen solicitada: Alpine 3.22)
+FROM mcr.microsoft.com/dotnet/aspnet:8.0.22-alpine3.22 AS final
 WORKDIR /app
 EXPOSE 8080
 
-# --- CONFIGURACIÓN DE SEGURIDAD PARA FORZAR > 2048 BITS ---
+# --- CONFIGURACIÓN DE SEGURIDAD PARA INTEGRACIÓN CON SÍNTESIS ---
 USER root
 
-# Instalamos openssl para asegurar que las herramientas de diagnóstico estén presentes
-RUN apt-get update && apt-get install -y openssl && rm -rf /var/lib/apt/lists/*
+# En Alpine usamos apk. Instalamos openssl para diagnóstico y CA-certificates
+RUN apk add --no-cache openssl ca-certificates
 
-# 1. Forzamos SECLEVEL=2 (Este es el estándar que exige 2048 bits como mínimo)
-# 2. Restringimos los Ciphers para eliminar los que usan DHE "plano" (que causa el error de dh key too small)
-#    y priorizamos ECDHE (Curva Elíptica) que es lo que el servidor de Síntesis soporta.
-RUN sed -i 's/CipherString = DEFAULT@SECLEVEL=2/CipherString = ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256@SECLEVEL=2/g' /etc/ssl/openssl.cnf
+# Modificación de OpenSSL para cumplir con los requisitos de Síntesis:
+# 1. Ajustamos MinProtocol a TLSv1.2.
+# 2. Definimos CipherString priorizando ECDHE y eliminando DHE plano para evitar "dh key too small".
+# 3. Mantenemos SECLEVEL=2.
+RUN sed -i 's/Providers = default_sect/Providers = default_sect\nssl_conf = ssl_module/g' /etc/ssl/openssl.cnf && \
+    printf "\n[ssl_module]\nsystem_default = system_default_sect\n" >> /etc/ssl/openssl.cnf && \
+    printf "\n[system_default_sect]\nMinProtocol = TLSv1.2\nCipherString = ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256@SECLEVEL=2\n" >> /etc/ssl/openssl.cnf
 
-# Forzamos TLS 1.2 como mínimo a nivel de sistema operativo
-RUN sed -i 's/MinProtocol = TLSv1.2/MinProtocol = TLSv1.2/g' /etc/ssl/openssl.cnf
-
-# Variables de entorno críticas
+# Variables de entorno críticas para .NET en entornos Kubernetes/Linux
 ENV ASPNETCORE_URLS=http://+:8080
-# Habilitamos el SocketsHttpHandler moderno que respeta la configuración de OpenSSL de arriba
+# Forzamos a que .NET use la configuración del stack criptográfico del SO
 ENV DOTNET_SYSTEM_NET_HTTP_USESOCKETSHTTPHANDLER=1
-# Esta variable asegura que .NET use las librerías de OpenSSL del sistema estrictamente
-ENV CLR_OPENSSL_VERSION_OVERRIDE=3
 
 COPY --from=build /app/publish .
 
-# Asegurar permisos
-RUN chown -R 1000:1000 /app
+# Alpine usa por defecto el usuario 'app' (uid 1654) en las imágenes de .NET 8, 
+# pero mantendremos tu estándar de UID 1000 si es el que usas en tus Pods de K8s.
+RUN adduser -u 1000 -D adminuser || true && \
+    chown -R 1000:1000 /app
+
 USER 1000
 
 ENTRYPOINT ["dotnet", "SintesisV-3.dll"]
